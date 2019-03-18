@@ -1,0 +1,31 @@
+{
+  "name": "jbdap-helper",
+  "version": "0.1.1",
+  "description": "A database helper which will help you to use jbdap-engine easily",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "build": "babel src -d lib",
+    "prepublish": "yarn run build"
+  },
+  "babel": {
+    "presets": [
+      "@babel/preset-env"
+    ],
+    "comments": false
+  },
+  "author": "JBDAP TEAM <jbdapteam@outlook.com>",
+  "license": "GPL-3.0",
+  "dependencies": {
+    "@babel/polyfill": "^7.2.5",
+    "knex": "^0.16.3",
+    "lodash": "^4.17.11"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.2.3",
+    "@babel/core": "^7.3.4",
+    "@babel/preset-env": "^7.3.4",
+    "jest": "^24.5.0",
+    "sqlite3": "^4.0.6"
+  }
+}

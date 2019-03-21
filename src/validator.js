@@ -112,3 +112,68 @@ function checkForeignKey(foreignKey) {
     return true
 }
 module.exports.checkForeignKey = checkForeignKey
+
+/**
+ * 检查数据表权限定义
+ * @param {object} auth 数据表结构定义
+ */
+function checkAuth(auth) {
+    // 参数类型
+    if (!_.isPlainObject(auth)) $throwError('ParamTypeError',null,null,[
+        ['zh-cn', '参数必须是 Object 对象'],
+        ['en-us', 'Param must be an plain Object']
+    ])
+    // 无效属性
+    let props = [
+        'name',
+        'verify',
+        'mask',
+        'freeze',
+        'select',
+        'create',
+        'update',
+        'delete'
+    ]
+    let keys = Object.keys(auth)
+    for (let i=0; i<keys.length; i++) {
+        if (props.indexOf(keys[i]) < 0) $throwError('InvalidPropError',null,null,[
+            ['zh-cn', `'${keys[i]}' 不是有效属性`],
+            ['en-us', `Property '${keys[i]}' is not valid`]
+        ])
+    }
+    // 必备属性
+    if (!_.isString(auth.name) || auth.name === '') $throwError('PropDefError',null,null,[
+        ['zh-cn', `'name' 属性必须是一个非空字符串`],
+        ['en-us', `Property 'name' must be a non-empty String`]
+    ])
+    props = [
+        'select',
+        'create',
+        'update',
+        'delete'
+    ]
+    for (let i=0; i<props.length; i++) {
+        if (_.isUndefined(auth[props[i]])) $throwError('PropMissingError',null,null,[
+            ['zh-cn', `'${props[i]}' 属性必须定义`],
+            ['en-us', `Property '${props[i]}' must be defined`]
+        ])
+        if (!_.isPlainObject(auth[props[i]])) $throwError('PropDefError',null,null,[
+            ['zh-cn', `'${props[i]}' 属性必须是一个 Object 对象`],
+            ['en-us', `Property '${props[i]}' must be a plain Object`]
+        ])
+    }
+    // 其它属性
+    props = [
+        'verify',
+        'mask',
+        'freeze'
+    ]
+    for (let i=0; i<props.length; i++) {
+        if (!_.isUndefined(auth[props[i]]) && !_.isPlainObject(auth[props[i]])) $throwError('PropDefError',null,null,[
+            ['zh-cn', `'${props[i]}' 属性必须是一个 Object 对象`],
+            ['en-us', `Property '${props[i]}' must be a plain Object`]
+        ])
+    }
+    return true
+}
+module.exports.checkAuth = checkAuth

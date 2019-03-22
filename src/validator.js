@@ -123,9 +123,10 @@ function checkAuth(auth) {
         ['zh-cn', '参数必须是 Object 对象'],
         ['en-us', 'Param must be an plain Object']
     ])
-    // 无效属性
+    // 无效属性检查
     let props = [
         'name',
+        'prepare',
         'verify',
         'mask',
         'freeze',
@@ -164,6 +165,7 @@ function checkAuth(auth) {
     }
     // 其它属性
     props = [
+        'prepare',
         'verify',
         'mask',
         'freeze'

@@ -84,6 +84,9 @@ async function createTable(conn,schema) {
                 // console.log(str)
                 eval(str)
             }
+            // 检查是否需要自动创建 createdAt 和 updatedAt
+            if (_.findIndex(schema.columns, { name: 'createdAt' }) < 0) table.datetime('createdAt')
+            if (_.findIndex(schema.columns, { name: 'updatedAt' }) < 0) table.datetime('updatedAt')
             // 创建唯一键
             if (schema.unique) table.unique(schema.unique)
             // 创建索引
@@ -111,23 +114,6 @@ async function createTable(conn,schema) {
 }
 module.exports.createTable = createTable
 
-/**
- * 对查询得到的数据进行敏感字段过滤后返回
- * @param {object} user 当前用户信息
- * @param {object} cmd 要执行的指令类型
- * @param {object} fields 解析后的字段
- * @param {array|object} data 查询到的结果
- */
-function scanner(user,cmd,fields,data) {
-    let configs = require('./database/design/' + cmd.target)
-    try {
-        return scan(configs.mask,user,fields,data)
-    }
-    catch (err) {
-        throw err
-    }
-}
-module.exports.scanner = scanner
 /**
  * 对查询得到的数据进行敏感字段过滤后返回
  * @param {object} configs 数据库权限配置
@@ -189,29 +175,11 @@ module.exports.scan = scan
 
 /**
  * 检查当前用户是否拥有执行该操作的权限
- * @param {object} user 当前用户信息
- * @param {object} cmd 要执行的指令
- * @param {array|object|null} data 可能需要校验的数据
- */
-async function doorman(user,cmd,target,data) {
-    let configs = require('./' + cmd.target + 'Auth')
-    // console.log(configs)
-    try {
-        return await verify(configs,user,cmd,target,data)
-    }
-    catch (err) {
-        throw err
-    }
-}
-
-/**
- * 检查当前用户是否拥有执行该操作的权限
  * @param {object} configs 数据表权限配置
  * @param {object} user 当前用户信息
  * @param {object} cmd 要执行的指令
- * @param {array|object|null} data 可能需要校验的数据
  */
-async function check(configs,user,cmd,target,data) {
+async function check(configs,user,cmd,target) {
     // 检查参数
     validator.checkAuth(configs)
     // 删改类型
@@ -251,111 +219,12 @@ async function check(configs,user,cmd,target,data) {
     let item = config[user.role]
     // console.log(item)
     // 配置为 false，直接拒绝
+    let allowForNow = false
     if (item === false) return false
     // 如果配置为 true，则需要检查数据有效性
-    else if (item === true) {
-        if (cmd.type === 'create') {
-            if (_.isUndefined(configs.verify)) return true
-            let ruleKeys = Object.keys(configs.verify)
-            let final = true
-            let fails = []
-            for (let i=0; i<data.length; i++) {
-                let row = data[i]
-                for (let j=0; j<Object.keys(row).length; j++) {
-                    let col = Object.keys(row)[j]
-                    // 需要验证的字段
-                    if (ruleKeys.indexOf(col) >= 0) {
-                        let func = configs.verify[col]
-                        // 枚举数组
-                        if (_.isArray(func)) {
-                            if (func.indexOf(row[col]) < 0) {
-                                if (fails.indexOf(col) < 0) fails.push(col)
-                                final = false
-                            }
-                        }
-                        else if (_.isFunction(func)) {
-                            if (await func(row[col]) === false) {
-                                if (fails.indexOf(col) < 0) fails.push(col)
-                                final = false
-                            }
-                        }
-                        else $throwError('InvalidDefError',null,null,[
-                            ['zh-cn', `有效性规则的定义有误`],
-                            ['en-us', `The 'verify' definition is invalid`]
-                        ])
-                    }
-                }
-            }
-            fails = _.uniq(fails)
-            if (final === false) $throwError('ValueCheckError',null,null,[
-                ['zh-cn', `有不符合规则的数据，请检查下列字段 '${fails.join(',')}'`],
-                ['en-us', `Some values are invalid, please check columns as follows '${fails.join(',')}'`]
-            ])
-            else return true
-        }
-        else if (cmd.type === 'update') {
-            if (_.isUndefined(configs.verify)) return true
-            let ruleKeys = Object.keys(configs.verify)
-            let final = true
-            let fails = []
-            // 更新类型的 data 只有一个对象
-            for (let j=0; j<Object.keys(data).length; j++) {
-                let col = Object.keys(data)[j]
-                // 需要验证的字段
-                if (ruleKeys.indexOf(col) >= 0) {
-                    let func = configs.verify[col]
-                    // 枚举数组
-                    if (_.isArray(func)) {
-                        if (func.indexOf(data[col]) < 0) {
-                            if (fails.indexOf(col) < 0) fails.push(col)
-                            final = false
-                        }
-                    }
-                    else if (_.isFunction(func)) {
-                        if (await func(data[col]) === false) {
-                            if (fails.indexOf(col) < 0) fails.push(col)
-                            final = false
-                        }
-                    }
-                    else $throwError('InvalidDefError',null,null,[
-                        ['zh-cn', `有效性规则的定义有误`],
-                        ['en-us', `The 'verify' definition is invalid`]
-                    ])
-                }
-            }
-            fails = _.uniq(fails)
-            if (final === false) $throwError('ValueCheckError',null,null,[
-                ['zh-cn', `有不符合规则的数据，请检查下列字段 '${fails.join(',')}'`],
-                ['en-us', `Some values are invalid, please check columns as follows '${fails.join(',')}'`]
-            ])
-            // 检查是否涉及冻结字段
-            if (_.isUndefined(configs.freeze)) return true
-            else if (!_.isString(configs.freeze[user.role]) && !_.isArray(configs.freeze[user.role])) $throwError('InvalidDefError',null,null,[
-                ['zh-cn', `角色 '${user.role}' 的冻结字段的定义有误`],
-                ['en-us', `The 'freeze' definition for '${user.role}' is invalid`]
-            ])
-            else {
-                let hasFreezed = false
-                let tryings = []
-                let columns = configs.freeze[user.role].split(',')
-                _.forEach(Object.keys(data), (key) => {
-                    if (columns.indexOf(key) >= 0) {
-                        tryings.push(key)
-                        hasFreezed = true
-                    }
-                })
-                if (hasFreezed === true) $throwError('FreezedColumnError',null,null,[
-                    ['zh-cn', `试图改变被冻结的数据字段 '${tryings.join(',')}'`],
-                    ['en-us', `You are trying to change some freezed columns '${tryings.join(',')}'`]
-                ])
-                else return true
-            }
-        }
-        else return true
-    }
+    else if (item === true) allowForNow = true
     // 字符串说明是字段约定，如 'id=$id'
     else if (_.isString(item) && item !== '') {
-        let allowForNow = false
         // 检查定义有效性
         let slices = item.split('=$')
         if (slices.length === 1 || slices.length > 2) $throwError('PropDefError',null,null,[
@@ -382,75 +251,12 @@ async function check(configs,user,cmd,target,data) {
                 ['zh-cn', '当前用户不是目标数据的持有者'],
                 ['en-us', 'Current user is not the owner of target data']
             ])
-            // 检查数据有效性
-            // delete 无需检查
-            if (cmd.type === 'delete') return true
-            else if (cmd.type === 'increase' || cmd.type === 'decrease') return true
-            else if (cmd.type === 'update') {
-                if (_.isUndefined(configs.verify)) return true
-                let ruleKeys = Object.keys(configs.verify)
-                let final = true
-                let fails = []
-                // 更新类型的 data 只有一个对象
-                for (let j=0; j<Object.keys(data).length; j++) {
-                    let col = Object.keys(data)[j]
-                    // 需要验证的字段
-                    if (ruleKeys.indexOf(col) >= 0) {
-                        let func = configs.verify[col]
-                        // 枚举数组
-                        if (_.isArray(func)) {
-                            if (func.indexOf(data[col]) < 0) {
-                                if (fails.indexOf(col) < 0) fails.push(col)
-                                final = false
-                            }
-                        }
-                        else if (_.isFunction(func)) {
-                            if (await func(data[col]) === false) {
-                                if (fails.indexOf(col) < 0) fails.push(col)
-                                final = false
-                            }
-                        }
-                        else $throwError('InvalidDefError',null,null,[
-                            ['zh-cn', `有效性规则的定义有误`],
-                            ['en-us', `The 'verify' definition is invalid`]
-                        ])
-                    }
-                }
-                fails = _.uniq(fails)
-                allowForNow = final
-                if (final === false) $throwError('ValueCheckError',null,null,[
-                    ['zh-cn', `有不符合规则的数据，请检查下列字段 '${fails.join(',')}'`],
-                    ['en-us', `Some values are invalid, please check columns as follows '${fails.join(',')}'`]
-                ])
-                // 检查是否涉及冻结字段
-                if (_.isUndefined(configs.freeze)) return true
-                else if (!_.isString(configs.freeze[user.role]) && !_.isArray(configs.freeze[user.role])) $throwError('InvalidDefError',null,null,[
-                    ['zh-cn', `角色 '${user.role}' 的冻结字段的定义有误`],
-                    ['en-us', `The 'freeze' definition for '${user.role}' is invalid`]
-                ])
-                else {
-                    let hasFreezed = false
-                    let tryings = []
-                    let columns = configs.freeze[user.role].split(',')
-                    _.forEach(Object.keys(data), (key) => {
-                        if (columns.indexOf(key) >= 0) {
-                            tryings.push(key)
-                            hasFreezed = true
-                        }
-                    })
-                    if (hasFreezed === true) $throwError('FreezedColumnError',null,null,[
-                        ['zh-cn', `试图改变被冻结的数据字段 '${tryings.join(',')}'`],
-                        ['en-us', `You are trying to change some freezed columns '${tryings.join(',')}'`]
-                    ])
-                    else return true
-                }
-            }
         }
         // 如果是创建数据类型
         else if (cmd.type === 'create') {
             // 通过与 user 的字段比对来判断是否当前用户所有
             let isOwner = true
-            _.forEach(target, (row) => {
+            _.forEach(cmd.data, (row) => {
                 // console.log(row)
                 if (Object.keys(row).indexOf(slices[0]) >= 0) {
                     if (row[slices[0]] !== user[slices[1]]) isOwner = false
@@ -459,50 +265,9 @@ async function check(configs,user,cmd,target,data) {
             })
             allowForNow = isOwner
             if (isOwner === false) $throwError('NotOwnerError',null,null,[
-                ['zh-cn', '当前用户不是目标数据的持有者'],
-                ['en-us', 'Current user is not the owner of target data']
+                ['zh-cn', '用户只能创建属于自己的数据'],
+                ['en-us', 'User can only create data of their own']
             ])
-            // 检查数据有效性
-            if (allowForNow === true) {
-                if (_.isUndefined(configs.verify)) return true
-                let ruleKeys = Object.keys(configs.verify)
-                let final = true
-                let fails = []
-                for (let i=0; i<data.length; i++) {
-                    let row = data[i]
-                    for (let j=0; j<Object.keys(row).length; j++) {
-                        let col = Object.keys(row)[j]
-                        // 需要验证的字段
-                        if (ruleKeys.indexOf(col) >= 0) {
-                            let func = configs.verify[col]
-                            // 枚举数组
-                            if (_.isArray(func)) {
-                                if (func.indexOf(row[col]) < 0) {
-                                    if (fails.indexOf(col) < 0) fails.push(col)
-                                    final = false
-                                }
-                            }
-                            else if (_.isFunction(func)) {
-                                if (await func(row[col]) === false) {
-                                    if (fails.indexOf(col) < 0) fails.push(col)
-                                    final = false
-                                }
-                            }
-                            else $throwError('InvalidDefError',null,null,[
-                                ['zh-cn', `有效性规则的定义有误`],
-                                ['en-us', `The 'verify' definition is invalid`]
-                            ])
-                        }
-                    }
-                }
-                allowForNow = final
-                fails = _.uniq(fails)
-                if (final === false) $throwError('ValueCheckError',null,null,[
-                    ['zh-cn', `有不符合规则的数据，请检查下列字段 '${fails.join(',')}'`],
-                    ['en-us', `Some values are invalid, please check columns as follows '${fails.join(',')}'`]
-                ])
-            }
-            return true
         }
         // 纯查询数据
         else {
@@ -519,16 +284,236 @@ async function check(configs,user,cmd,target,data) {
                 ['zh-cn', '当前用户不是目标数据的持有者'],
                 ['en-us', 'Current user is not the owner of target data']
             ])
+            // 查询无需进行有效性验证，直接返回
             else return true
         }
     }
     // 自定义函数
     else if (_.isFunction(item)) {
-        return await item(conn,user,cmd,target,data)
+        // console.log(item)
+        let yon = await $exec(item(user,cmd,target))
+        if (yon.error) $throwError('NotOwnerError',yon.error,null,[
+            ['zh-cn', '你没有进行当前操作的权限'],
+            ['en-us', 'You are not allowed to do so']
+        ])
+        allowForNow = yon.data
+        if (allowForNow === false) $throwError('NotOwnerError',null,null,[
+            ['zh-cn', '你没有进行当前操作的权限'],
+            ['en-us', 'You are not allowed to do so']
+        ])
     }
     else $throwError('PropTypeError',null,null,[
         ['zh-cn', `权限配置有误，'${cmd.type}.${user.role}' 的值必须是非空字符串或者 Function 类型`],
         ['en-us', `Config definition is invalid, the value of '${cmd.type}.${user.role}' must be a non-empty String or a Function`]
     ])
+    // 最后进行数据预处理及有效性验证
+    // 先是 create 操作
+    if (cmd.type === 'create') {
+        // 先检查是否涉及冻结字段
+        let freezedColumns = []
+        if (_.isUndefined(configs.freeze)) {
+            freezedColumns.push('createdAt')
+            freezedColumns.push('updatedAt')
+        }
+        else {
+            // 如果该角色没有定义 freeze 字段也要检查两个时间戳
+            if (_.isUndefined(configs.freeze[user.role])) {
+                freezedColumns.push('createdAt')
+                freezedColumns.push('updatedAt')
+            }
+            // 定义格式错误
+            else if (!_.isString(configs.freeze[user.role]) && !_.isArray(configs.freeze[user.role])) $throwError('InvalidDefError',null,null,[
+                ['zh-cn', `角色 '${user.role}' 的冻结字段的定义有误`],
+                ['en-us', `The 'freeze' definition for '${user.role}' is invalid`]
+            ])
+        }
+        let hasFreezed = false
+        let tryings = []
+        let columns = []
+        if (!_.isUndefined(configs.freeze) && !_.isUndefined(configs.freeze[user.role])) columns = configs.freeze[user.role].split(',')
+        freezedColumns = _.concat(freezedColumns,columns)
+        // create 的 data 是个数组
+        _.forEach(cmd.data, (row) => {
+            _.forEach(Object.keys(row), (key) => {
+                if (freezedColumns.indexOf(key) >= 0) {
+                    tryings.push(key)
+                    hasFreezed = true
+                }
+            })
+        })
+        if (hasFreezed === true) $throwError('FreezedColumnError',null,null,[
+            ['zh-cn', `新创建的数据中不能包含被冻结的数据字段 '${tryings.join(',')}'`],
+            ['en-us', `New data to be created can not contain freezed columns '${tryings.join(',')}'`]
+        ])
+        // 然后进行数据预处理
+        let needPrepare = false
+        if (!_.isUndefined(configs.prepare)) {
+            if (!_.isPlainObject(configs.prepare)) {
+                needPrepare = true
+                $throwError('InvalidDefError',null,null,[
+                    ['zh-cn', `数据预处理模块必须是一个 Object 对象`],
+                    ['en-us', `The 'prepare' module definition must be an Object`]
+                ])
+            }
+            let funcs = Object.keys(configs.prepare)
+            for (let i=0; i<cmd.data.length; i++) {
+                let row = cmd.data[i]
+                // func 是强制执行的，哪怕前端传来的数据没有这个字段
+                for (let j=0; j<funcs.length; j++) {
+                    let key = funcs[j]
+                    row[key] = await configs.prepare[key](row[key],user)
+                }
+                // 自动设置数据生成和最后更新时间
+                row.createdAt = new Date().toISOString()
+                row.updatedAt = new Date().toISOString()
+            }
+        }
+        else needPrepare = true
+        if (needPrepare) {
+            for (let i=0; i<cmd.data.length; i++) {
+                let row = cmd.data[i]
+                // 自动设置数据生成和最后更新时间
+                row.createdAt = new Date().toISOString()
+                row.updatedAt = new Date().toISOString()
+            }
+        }
+        // 最后对字段有效性进行检查
+        if (_.isUndefined(configs.verify)) return true
+        let ruleKeys = Object.keys(configs.verify)
+        let final = true
+        let fails = []
+        for (let i=0; i<cmd.data.length; i++) {
+            let row = cmd.data[i]
+            for (let j=0; j<Object.keys(row).length; j++) {
+                let col = Object.keys(row)[j]
+                // 需要验证的字段
+                if (ruleKeys.indexOf(col) >= 0) {
+                    let func = configs.verify[col]
+                    // 枚举数组
+                    if (_.isArray(func)) {
+                        if (func.indexOf(row[col]) < 0) {
+                            if (fails.indexOf(col) < 0) fails.push(col)
+                            final = false
+                        }
+                    }
+                    else if (_.isFunction(func)) {
+                        let checked = await func(row[col],user)
+                        if (checked === false) {
+                            if (fails.indexOf(col) < 0) fails.push(col)
+                            final = false
+                        }
+                    }
+                    else $throwError('InvalidDefError',null,null,[
+                        ['zh-cn', `有效性规则的定义有误`],
+                        ['en-us', `The 'verify' definition is invalid`]
+                    ])
+                }
+            }
+        }
+        fails = _.uniq(fails)
+        if (final === false) $throwError('ValueCheckError',null,null,[
+            ['zh-cn', `有不符合规则的数据，请检查下列字段 '${fails.join(',')}'`],
+            ['en-us', `Some values are invalid, please check columns as follows '${fails.join(',')}'`]
+        ])
+        else return true
+    }
+    else if (cmd.type === 'update') {
+        // 先检查是否涉及冻结字段
+        let freezedColumns = []
+        if (_.isUndefined(configs.freeze)) {
+            freezedColumns.push('createdAt')
+            freezedColumns.push('updatedAt')
+        }
+        else {
+            // 如果该角色没有定义 freeze 字段也要检查两个时间戳
+            if (_.isUndefined(configs.freeze[user.role])) {
+                freezedColumns.push('createdAt')
+                freezedColumns.push('updatedAt')
+            }
+            // 定义格式错误
+            else if (!_.isString(configs.freeze[user.role]) && !_.isArray(configs.freeze[user.role])) $throwError('InvalidDefError',null,null,[
+                ['zh-cn', `角色 '${user.role}' 的冻结字段的定义有误`],
+                ['en-us', `The 'freeze' definition for '${user.role}' is invalid`]
+            ])
+        }
+        let hasFreezed = false
+        let tryings = []
+        let columns = []
+        if (!_.isUndefined(configs.freeze) && !_.isUndefined(configs.freeze[user.role])) columns = configs.freeze[user.role].split(',')
+        freezedColumns = _.concat(freezedColumns,columns)
+        // updata 的 data 是个 Object
+        _.forEach(Object.keys(cmd.data), (key) => {
+            if (freezedColumns.indexOf(key) >= 0) {
+                tryings.push(key)
+                hasFreezed = true
+            }
+        })
+        if (hasFreezed === true) $throwError('FreezedColumnError',null,null,[
+            ['zh-cn', `试图更新被冻结的数据字段 '${tryings.join(',')}'`],
+            ['en-us', `You are trying to update some freezed columns '${tryings.join(',')}'`]
+        ])
+        // 然后进行数据预处理
+        let needPrepare = false
+        if (!_.isUndefined(configs.prepare)) {
+            if (!_.isPlainObject(configs.prepare)) {
+                needPrepare = true
+                $throwError('InvalidDefError',null,null,[
+                    ['zh-cn', `数据预处理模块必须是一个 Object 对象`],
+                    ['en-us', `The 'prepare' module definition must be an Object`]
+                ])
+            }
+            let funcs = Object.keys(configs.prepare)
+            // func 是强制执行的，哪怕前端传来的数据没有这个字段
+            for (let j=0; j<funcs.length; j++) {
+                let key = funcs[j]
+                cmd.data[key] = await configs.prepare[key](cmd.data[key],user)
+            }
+            // 自动设置数据最后更新时间
+            cmd.data.updatedAt = new Date().toISOString()
+        }
+        else needPrepare = true
+        if (needPrepare) {
+            // 自动设置数据最后更新时间
+            cmd.data.updatedAt = new Date().toISOString()
+        }
+        // 最后进行字段有效性检查
+        if (_.isUndefined(configs.verify)) return true
+        let ruleKeys = Object.keys(configs.verify)
+        let final = true
+        let fails = []
+        // 更新类型的 data 只有一个对象
+        for (let j=0; j<Object.keys(cmd.data).length; j++) {
+            let col = Object.keys(cmd.data)[j]
+            // 需要验证的字段
+            if (ruleKeys.indexOf(col) >= 0) {
+                let func = configs.verify[col]
+                // 枚举数组
+                if (_.isArray(func)) {
+                    if (func.indexOf(cmd.data[col]) < 0) {
+                        if (fails.indexOf(col) < 0) fails.push(col)
+                        final = false
+                    }
+                }
+                else if (_.isFunction(func)) {
+                    let checked = await func(cmd.data[col],user)
+                    if (checked === false) {
+                        if (fails.indexOf(col) < 0) fails.push(col)
+                        final = false
+                    }
+                }
+                else $throwError('InvalidDefError',null,null,[
+                    ['zh-cn', `有效性规则的定义有误`],
+                    ['en-us', `The 'verify' definition is invalid`]
+                ])
+            }
+        }
+        fails = _.uniq(fails)
+        if (final === false) $throwError('ValueCheckError',null,null,[
+            ['zh-cn', `有不符合规则的数据，请检查下列字段 '${fails.join(',')}'`],
+            ['en-us', `Some values are invalid, please check columns as follows '${fails.join(',')}'`]
+        ])
+        else return true
+    }
+    else return true
 }
 module.exports.check = check

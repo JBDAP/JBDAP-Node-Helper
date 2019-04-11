@@ -24,6 +24,7 @@ function checkSchema(schema) {
     // 无效属性
     let props = [
         'name',
+        'comment',
         'columns',
         'indexes',
         'unique',
@@ -72,6 +73,24 @@ function checkColumn(column) {
         ['zh-cn', '参数必须是 Object 对象'],
         ['en-us', 'Param must be an plain Object']
     ])
+    // 无效属性
+    let props = [
+        'name',
+        'type',
+        'comment',
+        'primary',
+        'length',
+        'unsigned',
+        'notNullable',
+        'defaultTo'
+    ]
+    let keys = Object.keys(column)
+    for (let i=0; i<keys.length; i++) {
+        if (props.indexOf(keys[i]) < 0) $throwError('InvalidPropError',null,null,[
+            ['zh-cn', `'${keys[i]}' 不是有效属性`],
+            ['en-us', `Property '${keys[i]}' is not valid`]
+        ])
+    }
     // 必备属性
     if (!_.isString(column.name) || column.name === '') $throwError('PropDefError',null,null,[
         ['zh-cn', `'name' 属性必须是一个非空字符串`],
@@ -96,6 +115,19 @@ function checkForeignKey(foreignKey) {
         ['zh-cn', '参数必须是 Object 对象'],
         ['en-us', 'Param must be an plain Object']
     ])
+    // 无效属性
+    let props = [
+        'selfColumn',
+        'targetTable',
+        'targetColumn'
+    ]
+    let keys = Object.keys(foreignKey)
+    for (let i=0; i<keys.length; i++) {
+        if (props.indexOf(keys[i]) < 0) $throwError('InvalidPropError',null,null,[
+            ['zh-cn', `'${keys[i]}' 不是有效属性`],
+            ['en-us', `Property '${keys[i]}' is not valid`]
+        ])
+    }
     // 必备属性
     if (!_.isString(foreignKey.selfColumn) || foreignKey.selfColumn === '') $throwError('PropDefError',null,null,[
         ['zh-cn', `'selfColumn' 属性必须是一个非空字符串`],

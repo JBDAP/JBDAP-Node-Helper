@@ -1,6 +1,6 @@
 {
   "name": "jbdap-helper",
-  "version": "0.1.15",
+  "version": "0.2.0",
   "description": "A database helper which will help you to use jbdap-engine easily",
   "main": "index.js",
   "scripts": {
@@ -11,6 +11,7 @@
   "author": "JBDAP TEAM <jbdapteam@outlook.com>",
   "license": "GPL-3.0",
   "dependencies": {
+    "jbdap-global": "^0.1.2",
     "knex": "^0.16.3",
     "lodash": "^4.17.11"
   },

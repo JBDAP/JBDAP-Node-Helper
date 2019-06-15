@@ -21,6 +21,7 @@ function checkSchema(schema,lang) {
     let props = [
         'name',
         'comment',
+        'notice',
         'columns',
         'indexes',
         'unique',
@@ -43,6 +44,14 @@ function checkSchema(schema,lang) {
         ['en-us', `Property 'columns' must be a non-empty Array`]
     ],lang)
     // 其它属性
+    if (!JS._.isUndefined(schema.comment) && !JS._.isString(schema.comment)) JS.throwError('PropDefError',null,null,[
+        ['zh-cn', `'comment' 属性必须是一个字符串`],
+        ['en-us', `Property 'comment' must be a String`]
+    ],lang)
+    if (!JS._.isUndefined(schema.notice) && !JS._.isString(schema.notice)) JS.throwError('PropDefError',null,null,[
+        ['zh-cn', `'notice' 属性必须是一个字符串`],
+        ['en-us', `Property 'notice' must be a String`]
+    ],lang)
     if (!JS._.isUndefined(schema.unique) && (!JS._.isArray(schema.unique) || schema.unique.length === 0)) JS.throwError('PropDefError',null,null,[
         ['zh-cn', `'unique' 属性必须是一个非空数组`],
         ['en-us', `Property 'unique' must be a non-empty Array`]

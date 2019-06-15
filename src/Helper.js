@@ -73,7 +73,8 @@ async function createTable(conn,schema,lang) {
                 let notNullable = column.notNullable === true ? '.notNullable()' : ''
                 let defaultTo = !JS._.isUndefined(column.defaultTo) ? `.defaultTo(${JSON.stringify(column.defaultTo)})` : ''
                 let unsigned = ((column.type === 'integer' || column.type === 'bigInteger' || column.type === 'float' || column.type === 'decimal') && column.unsigned === true) ? '.unsigned()' : ''
-                let str = `table${type}${unsigned}${notNullable}${defaultTo}${primary}`
+                let comment = (JS._.isString(column.comment) && column.comment !== '') ? `.comment('${column.comment}')` : ''
+                let str = `table${type}${unsigned}${notNullable}${defaultTo}${primary}${comment}`
                 // console.log(str)
                 eval(str)
             }
@@ -81,7 +82,11 @@ async function createTable(conn,schema,lang) {
             if (JS._.findIndex(schema.columns, { name: 'createdAt' }) < 0) table.datetime('createdAt')
             if (JS._.findIndex(schema.columns, { name: 'updatedAt' }) < 0) table.datetime('updatedAt')
             // 创建唯一键
-            if (schema.unique) table.unique(schema.unique)
+            if (schema.unique) {
+                for (let i=0; i<schema.unique.length; i++) {
+                    table.unique(schema.unique[i])
+                }
+            }
             // 创建索引
             if (schema.indexes) {
                 for (let i=0; i<schema.indexes.length; i++) {
@@ -115,7 +120,7 @@ module.exports.createTable = createTable
  * @param {array|object} data 查询到的结果
  * @param {string} lang 提示信息所用语言
  */
-function scan(configs,user,fields,data,lang) {
+async function scan(configs,user,fields,data,lang) {
     if (JS._.isUndefined(lang)) lang = JE.i18nLang
     // 检查参数
     validator.checkAuth(configs,lang)
@@ -186,7 +191,7 @@ async function check(configs,user,cmd,target,lang) {
         'delete',
         'increase',
         'decrease'
-    ]    
+    ]
     let config = null
     switch (cmd.type) {
         case 'entity':
@@ -210,6 +215,8 @@ async function check(configs,user,cmd,target,lang) {
             break
         }
     }
+    // 如果没配置视作无权限
+    if (JS._.isUndefined(config)) return false
     // console.log(config)
     let keys = Object.keys(config)
     // 角色没有配置视作无权限
@@ -289,7 +296,7 @@ async function check(configs,user,cmd,target,lang) {
     // 自定义函数
     else if (JS._.isFunction(item)) {
         // console.log(item)
-        let yon = await $exec(item(user,cmd,target))
+        let yon = await JS.exec(item(user,cmd,target))
         if (yon.error) JS.throwError('NotOwnerError',yon.error,null,[
             ['zh-cn', '你没有进行当前操作的权限'],
             ['en-us', 'You are not allowed to do so']
@@ -362,8 +369,8 @@ async function check(configs,user,cmd,target,lang) {
                     row[key] = await configs.prepare[key](row[key],user)
                 }
                 // 自动设置数据生成和最后更新时间
-                row.createdAt = new Date().toISOString()
-                row.updatedAt = new Date().toISOString()
+                if (!row.createdAt) row.createdAt = new Date().toISOString()
+                if (!row.updatedAt) row.updatedAt = new Date().toISOString()
             }
         }
         else needPrepare = true
@@ -371,8 +378,8 @@ async function check(configs,user,cmd,target,lang) {
             for (let i=0; i<cmd.data.length; i++) {
                 let row = cmd.data[i]
                 // 自动设置数据生成和最后更新时间
-                row.createdAt = new Date().toISOString()
-                row.updatedAt = new Date().toISOString()
+                if (!row.createdAt) row.createdAt = new Date().toISOString()
+                if (!row.updatedAt) row.updatedAt = new Date().toISOString()
             }
         }
         // 最后对字段有效性进行检查
@@ -467,12 +474,12 @@ async function check(configs,user,cmd,target,lang) {
                 cmd.data[key] = await configs.prepare[key](cmd.data[key],user)
             }
             // 自动设置数据最后更新时间
-            cmd.data.updatedAt = new Date().toISOString()
+            if (!cmd.data.updatedAt) cmd.data.updatedAt = new Date().toISOString()
         }
         else needPrepare = true
         if (needPrepare) {
             // 自动设置数据最后更新时间
-            cmd.data.updatedAt = new Date().toISOString()
+            if (!cmd.data.updatedAt) cmd.data.updatedAt = new Date().toISOString()
         }
         // 最后进行字段有效性检查
         if (JS._.isUndefined(configs.verify)) return true

@@ -2,7 +2,7 @@
 const Helper = require('../src/Helper')
 const JS = global.$JBDAP_SYS
 
-test('测试 scan 方法', () => {
+test('测试 scan 方法', async () => {
     let configs = {
         name: 'test',
         select: {},
@@ -23,67 +23,56 @@ test('测试 scan 方法', () => {
             email: null
         }
     ]
+    // expect.assertions(14)
     // configs 为 undefined
-    try {
-        Helper.scan(undefined,user,fields,data)
-    }
-    catch (err) {
-        expect(err.name).toBe('ParamTypeError')
-        expect(err.fullMessage()).toMatch(/参数必须是 Object 对象/)
-    }
+    let res = await JS.exec(Helper.scan(undefined,user,fields,data))
+    expect(res.error.name).toBe('ParamTypeError')
+    expect(res.error.fullMessage()).toMatch(/参数必须是 Object 对象/)
     // mask 为 undefined
-    expect(Helper.scan(configs,user,fields,data)).toEqual(data)
+    expect(await Helper.scan(configs,user,fields,data)).toEqual(data)
     // mask 类型错误
     configs.mask = 123
-    try {
-        Helper.scan(configs,user,fields,data)
-    }
-    catch (err) {
-        expect(err.name).toBe('PropDefError')
-        expect(err.fullMessage()).toMatch(/属性必须是一个 Object 对象/)
-    }
+    res = await JS.exec(Helper.scan(configs,user,fields,data))
+    expect(res.error.name).toBe('PropDefError')
+    expect(res.error.fullMessage()).toMatch(/属性必须是一个 Object 对象/)
     // config 的 role 未定义
     configs.mask = {}
-    expect(Helper.scan(configs,user,fields,data)).toEqual(data)
+    expect(await Helper.scan(configs,user,fields,data)).toEqual(data)
     // config 的 role 定义成空字符串
     configs.mask = {
         default: ''
     }
-    try {
-        Helper.scan(configs,user,fields,data)
-    }
-    catch (err) {
-        expect(err.name).toBe('PropTypeError')
-        expect(err.fullMessage()).toMatch(/必须是非空 String 或者 Array 类型/)
-    }
+    res = await JS.exec(Helper.scan(configs,user,fields,data))
+    expect(res.error.name).toBe('PropTypeError')
+    expect(res.error.fullMessage()).toMatch(/必须是非空 String 或者 Array 类型/)
     // config 的 role 是非法类型
     configs.mask = {
         default: 123
     }
-    try {
-        Helper.scan(configs,user,fields,data)
-    }
-    catch (err) {
-        expect(err.name).toBe('PropTypeError')
-        expect(err.fullMessage()).toMatch(/必须是非空 String 或者 Array 类型/)
-    }
+    res = await JS.exec(Helper.scan(configs,user,fields,data))
+    expect(res.error.name).toBe('PropTypeError')
+    expect(res.error.fullMessage()).toMatch(/必须是非空 String 或者 Array 类型/)
     // config 的 role 定义正常
     configs.mask = {
         default: 'password'
     }
-    expect(Helper.scan(configs,user,fields,data)[0].password).toEqual('***')
+    res = await JS.exec(Helper.scan(configs,user,fields,data))
+    expect(res.data[0].password).toEqual('***')
     configs.mask = {
         default: ['password']
     }
-    expect(Helper.scan(configs,user,fields,data)[0].password).toEqual('***')
+    res = await JS.exec(Helper.scan(configs,user,fields,data))
+    expect(res.data[0].password).toEqual('***')
     configs.mask = {
         default: '*'
     }
-    expect(Helper.scan(configs,user,fields,data)[0].password).toEqual('***')
+    res = await JS.exec(Helper.scan(configs,user,fields,data))
+    expect(res.data[0].password).toEqual('***')
     configs.mask = {
         default: []
     }
-    expect(Helper.scan(configs,user,fields,data)[0].password).toEqual('***')
+    res = await JS.exec(Helper.scan(configs,user,fields,data))
+    expect(res.data[0].password).toEqual('***')
 })
 
 test('测试 check 方法', async () => {

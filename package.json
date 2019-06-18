@@ -1,6 +1,6 @@
 {
   "name": "jbdap-helper",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "A database helper which will help you to use jbdap-engine easily",
   "main": "index.js",
   "scripts": {

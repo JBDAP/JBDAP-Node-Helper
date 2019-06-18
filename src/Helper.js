@@ -82,9 +82,9 @@ async function createTable(conn,schema,lang) {
             if (JS._.findIndex(schema.columns, { name: 'createdAt' }) < 0) table.datetime('createdAt')
             if (JS._.findIndex(schema.columns, { name: 'updatedAt' }) < 0) table.datetime('updatedAt')
             // 创建唯一键
-            if (schema.unique) {
-                for (let i=0; i<schema.unique.length; i++) {
-                    table.unique(schema.unique[i])
+            if (schema.uniques) {
+                for (let i=0; i<schema.uniques.length; i++) {
+                    table.unique(schema.uniques[i])
                 }
             }
             // 创建索引

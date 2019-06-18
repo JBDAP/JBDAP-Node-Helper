@@ -53,24 +53,24 @@ test('测试 checkSchema 方法', () => {
         expect(err.name).toBe('PropDefError')
         expect(err.fullMessage()).toMatch(/'columns'/)
     }
-    // unique 为空数组
+    // uniques 为空数组
     json = {
         name: 'test',
         columns: [{}],
-        unique: []
+        uniques: []
     }
     try {
         validator.checkSchema(json)
     }
     catch (err) {
         expect(err.name).toBe('PropDefError')
-        expect(err.fullMessage()).toMatch(/'unique'/)
+        expect(err.fullMessage()).toMatch(/'uniques'/)
     }
     // indexes 为空数组
     json = {
         name: 'test',
         columns: [{}],
-        unique: [''],
+        uniques: [''],
         indexes: []
     }
     try {
@@ -84,7 +84,7 @@ test('测试 checkSchema 方法', () => {
     json = {
         name: 'test',
         columns: [{}],
-        unique: [''],
+        uniques: [''],
         indexes: [[]],
         foreignKeys: []
     }
@@ -100,7 +100,7 @@ test('测试 checkSchema 方法', () => {
         tst: '123',
         name: 'test',
         columns: [{}],
-        unique: [''],
+        uniques: [''],
         indexes: [[]],
         foreignKeys: []
     }
@@ -115,7 +115,7 @@ test('测试 checkSchema 方法', () => {
     json = {
         name: 'test',
         columns: [{}],
-        unique: [''],
+        uniques: [''],
         indexes: [[]],
         foreignKeys: [{}]
     }

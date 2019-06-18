@@ -34,8 +34,8 @@ let role = {
             type: 'datetime'
         }
     ],
-    unique: [
-        'name'
+    uniques: [
+        ['name']
     ]
 }
 
@@ -77,9 +77,8 @@ let user = {
             type: 'datetime'
         }
     ],
-    unique: [
-        'level',
-        'username'
+    uniques: [
+        ['level','username']
     ],
     indexes: [
         ['level'],

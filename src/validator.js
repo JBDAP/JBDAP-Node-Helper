@@ -24,7 +24,7 @@ function checkSchema(schema,lang) {
         'notice',
         'columns',
         'indexes',
-        'unique',
+        'uniques',
         'foreignKeys'
     ]
     let keys = Object.keys(schema)
@@ -52,9 +52,9 @@ function checkSchema(schema,lang) {
         ['zh-cn', `'notice' 属性必须是一个字符串`],
         ['en-us', `Property 'notice' must be a String`]
     ],lang)
-    if (!JS._.isUndefined(schema.unique) && (!JS._.isArray(schema.unique) || schema.unique.length === 0)) JS.throwError('PropDefError',null,null,[
-        ['zh-cn', `'unique' 属性必须是一个非空数组`],
-        ['en-us', `Property 'unique' must be a non-empty Array`]
+    if (!JS._.isUndefined(schema.uniques) && (!JS._.isArray(schema.uniques) || schema.uniques.length === 0)) JS.throwError('PropDefError',null,null,[
+        ['zh-cn', `'uniques' 属性必须是一个非空数组`],
+        ['en-us', `Property 'uniques' must be a non-empty Array`]
     ],lang)
     if (!JS._.isUndefined(schema.indexes) && (!JS._.isArray(schema.indexes) || schema.indexes.length === 0)) JS.throwError('PropDefError',null,null,[
         ['zh-cn', `'indexes' 属性必须是一个非空数组`],

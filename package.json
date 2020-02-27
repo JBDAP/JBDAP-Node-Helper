@@ -14,7 +14,7 @@
   "license": "GPL-3.0",
   "dependencies": {
     "jbdap-global": "^0.1.5",
-    "knex": "^0.17.5"
+    "knex": "^0.20.1"
   },
   "devDependencies": {
     "@babel/cli": "^7.4.4",

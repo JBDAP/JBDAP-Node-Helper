@@ -22,12 +22,19 @@ async function createTables(conn,tables,lang) {
     if (JS._.isUndefined(lang)) lang = JE.i18nLang
     try {
         if (JS._.isArray(tables) && tables.length > 0) {
+            // 先创建表结构
             for (let i=0; i<tables.length; i++) {
                 let table = tables[i]
                 // 合法性检查
                 validator.checkSchema(table,lang)
                 // 创建单个表的结构
                 await createTable(conn,table,lang)
+            }
+            // 最后创建外键
+            for (let i=0; i<tables.length; i++) {
+                let table = tables[i]
+                // 创建单个表的外键
+                await createForeignKeys(conn,table,lang)
             }
         }
         else JS.throwError('ParamTypeError',null,null,[
@@ -60,7 +67,7 @@ async function createTable(conn,schema,lang) {
         ['zh-cn', `数据表 '${schema.name}' 已经存在`],
         ['en-us', `Table '${schema.name}' already exists`]
     ],lang)
-    // 创建字段、唯一键、索引、外键
+    // 创建字段、唯一键、索引
     return conn.schema.createTable(schema.name, (table) => {
         try {
             // 创建字段
@@ -79,8 +86,8 @@ async function createTable(conn,schema,lang) {
                 eval(str)
             }
             // 检查是否需要自动创建 createdAt 和 updatedAt
-            if (JS._.findIndex(schema.columns, { name: 'createdAt' }) < 0) table.datetime('createdAt')
-            if (JS._.findIndex(schema.columns, { name: 'updatedAt' }) < 0) table.datetime('updatedAt')
+            if (JS._.findIndex(schema.columns, { name: 'createdAt' }) < 0) table.datetime('createdAt').comment('数据创建时间')
+            if (JS._.findIndex(schema.columns, { name: 'updatedAt' }) < 0) table.datetime('updatedAt').comment('最后更新时间')
             // 创建唯一键
             if (schema.uniques) {
                 for (let i=0; i<schema.uniques.length; i++) {
@@ -93,6 +100,36 @@ async function createTable(conn,schema,lang) {
                     table.index(schema.indexes[i])
                 }
             }
+        }
+        catch (err) {
+            JS.throwError('SingleTableInitError',err,null,[
+                ['zh-cn', `创建数据表 '${schema.name}' 结构出错`],
+                ['en-us', `Error occurred while creating struct of table '${schema.name}'`]
+            ],lang)
+        }
+    })
+}
+module.exports.createTable = createTable
+
+/**
+ * 创建单个数据表外键
+ * @param {object} conn 数据库连接
+ * @param {object} schema 单个数据表的定义文件
+ * @param {string} lang 提示信息所用语言
+ */
+async function createForeignKeys(conn,schema,lang) {
+    if (JS._.isUndefined(lang)) lang = JE.i18nLang
+    // 合法性检查
+    validator.checkSchema(schema,lang)
+    // 检查表名是否存在
+    let exists = await conn.schema.hasTable(schema.name)
+    if (!exists) JS.throwError('TableExistsError',null,null,[
+        ['zh-cn', `数据表 '${schema.name}' 不存在`],
+        ['en-us', `Table '${schema.name}' does not exist`]
+    ],lang)
+    // 创建外键
+    return conn.schema.table(schema.name, (table) => {
+        try {
             // 创建外键
             if (schema.foreignKeys) {
                 for (let i=0; i<schema.foreignKeys.length; i++) {
@@ -104,13 +141,13 @@ async function createTable(conn,schema,lang) {
         }
         catch (err) {
             JS.throwError('SingleTableInitError',err,null,[
-                ['zh-cn', `创建数据表 '${schema.name}' 结构出错`],
-                ['en-us', `Error occurred while creating struct of table '${schema.name}'`]
+                ['zh-cn', `创建数据表 '${schema.name}' 外键出错`],
+                ['en-us', `Error occurred while creating foreignKeys of table '${schema.name}'`]
             ],lang)
         }
     })
 }
-module.exports.createTable = createTable
+module.exports.createForeignKeys = createForeignKeys
 
 /**
  * 对查询得到的数据进行敏感字段过滤后返回
@@ -213,6 +250,9 @@ async function check(configs,user,cmd,target,lang) {
         case 'decrease': {
             config = configs.update
             break
+        }
+        case 'function': {
+            return true
         }
     }
     // 如果没配置视作无权限
@@ -351,7 +391,6 @@ async function check(configs,user,cmd,target,lang) {
             ['en-us', `New data to be created can not contain freezed columns '${tryings.join(',')}'`]
         ],lang)
         // 然后进行数据预处理
-        let needPrepare = false
         if (!JS._.isUndefined(configs.prepare)) {
             if (!JS._.isPlainObject(configs.prepare)) {
                 needPrepare = true
@@ -368,18 +407,6 @@ async function check(configs,user,cmd,target,lang) {
                     let key = funcs[j]
                     row[key] = await configs.prepare[key](row[key],user)
                 }
-                // 自动设置数据生成和最后更新时间
-                if (!row.createdAt) row.createdAt = new Date().toISOString()
-                if (!row.updatedAt) row.updatedAt = new Date().toISOString()
-            }
-        }
-        else needPrepare = true
-        if (needPrepare) {
-            for (let i=0; i<cmd.data.length; i++) {
-                let row = cmd.data[i]
-                // 自动设置数据生成和最后更新时间
-                if (!row.createdAt) row.createdAt = new Date().toISOString()
-                if (!row.updatedAt) row.updatedAt = new Date().toISOString()
             }
         }
         // 最后对字段有效性进行检查
@@ -458,7 +485,6 @@ async function check(configs,user,cmd,target,lang) {
             ['en-us', `You are trying to update some freezed columns '${tryings.join(',')}'`]
         ],lang)
         // 然后进行数据预处理
-        let needPrepare = false
         if (!JS._.isUndefined(configs.prepare)) {
             if (!JS._.isPlainObject(configs.prepare)) {
                 needPrepare = true
@@ -473,13 +499,6 @@ async function check(configs,user,cmd,target,lang) {
                 let key = funcs[j]
                 cmd.data[key] = await configs.prepare[key](cmd.data[key],user)
             }
-            // 自动设置数据最后更新时间
-            if (!cmd.data.updatedAt) cmd.data.updatedAt = new Date().toISOString()
-        }
-        else needPrepare = true
-        if (needPrepare) {
-            // 自动设置数据最后更新时间
-            if (!cmd.data.updatedAt) cmd.data.updatedAt = new Date().toISOString()
         }
         // 最后进行字段有效性检查
         if (JS._.isUndefined(configs.verify)) return true
